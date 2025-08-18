@@ -12,6 +12,7 @@ const DOCUMENT_URL = process.env.DOCUMENT_URL || 'https://example.com/your-secur
 const TOKEN_TTL_MS = (parseInt(process.env.TOKEN_TTL_MIN || '10', 10) * 60 * 1000);
 
 app.use(express.json());
+let lastAntibotReports = new Set(); // store recent report hashes
 
 // 🔹 Trust proxy so req.ip gives real client IP
 app.set('trust proxy', true);
@@ -71,6 +72,20 @@ app.post('/__antibot-report', async (req, res) => {
 ❌ Reason: ${reason}
   `;
 
+  // hash to detect duplicates
+  const reportHash = crypto.createHash('md5').update(msg).digest('hex');
+
+  if (lastAntibotReports.has(reportHash)) {
+    logLine(`ANTIBOT_SKIPPED_DUPLICATE ip=${ip}`);
+    return res.json({ ok: true, skipped: true });
+  }
+
+  // keep only last 100 reports in memory
+  if (lastAntibotReports.size > 100) {
+    lastAntibotReports.clear();
+  }
+  lastAntibotReports.add(reportHash);
+
   if (process.env.TELE_BOT && process.env.CHAT_ID) {
     try {
       await fetch(`https://api.telegram.org/bot${process.env.TELE_BOT}/sendMessage`, {
@@ -78,6 +93,7 @@ app.post('/__antibot-report', async (req, res) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: process.env.CHAT_ID, text: msg, parse_mode: "Markdown" })
       });
+      logLine(`ANTIBOT_TELEGRAM_SENT ip=${ip}`);
     } catch (err) {
       logLine(`ANTIBOT_TELEGRAM_ERROR ${err.message}`);
     }
